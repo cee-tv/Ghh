@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IPTV Player</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.6/shaka-player.compiled.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0a0a0a]">
+    <div class="container mx-auto p-4 flex flex-col lg:flex-row gap-6">
+        <div class="lg:w-3/4">
+            <div class="relative bg-[#111] rounded-xl overflow-hidden shadow-2xl">
+                <video id="video" class="w-full aspect-video object-cover"></video>
+                <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#000000] via-[#00000080] to-transparent p-8">
+                    <h1 id="channelTitle" class="text-white text-2xl font-bold mb-4">Select a Channel</h1>
+                    <div class="flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex items-center gap-4">
+                            <button onclick="previousChannel()" class="text-white hover:text-[#00ff9d] transition-all">
+                                <i class="fas fa-backward-step text-xl"></i>
+                            </button>
+                            <button onclick="togglePlayPause()" class="w-12 h-12 flex items-center justify-center bg-[#00ff9d] hover:bg-[#00cc7d] rounded-full transition-all">
+                                <i class="fas fa-play text-black text-lg" id="playPauseIcon"></i>
+                            </button>
+                            <button onclick="nextChannel()" class="text-white hover:text-[#00ff9d] transition-all">
+                                <i class="fas fa-forward-step text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <button onclick="toggleMute()" class="text-white hover:text-[#00ff9d] transition-all">
+                                <i id="volumeIcon" class="fas fa-volume-high text-xl"></i>
+                            </button>
+                            <input type="range" min="0" max="1" step="0.1" value="1" onchange="handleVolumeChange(this.value)" class="w-24 md:w-32 accent-[#00ff9d]" />
+                            <button onclick="toggleFullscreen()" class="text-white hover:text-[#00ff9d] transition-all">
+                                <i id="fullscreenIcon" class="fas fa-expand text-xl"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:w-1/4">
+            <div class="bg-[#111] rounded-xl shadow-2xl overflow-hidden">
+                <div class="p-6 border-b border-[#222]">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-white text-xl font-bold">Channel List</h2>
+                        <span class="bg-[#00ff9d] text-black text-sm px-3 py-1 rounded-full">2 Channels</span>
+                    </div>
+                </div>
+                <div class="p-4 max-h-[calc(100vh-240px)] overflow-y-auto">
+                    <div id="channelList" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const channels = [
+            {
+                name: "tv5 1",
+                url: "https://qp-pldt-live-grp-02-prod.akamaized.net/out/u/tv5_hd.mpd",
+                key: "2615129ef2c846a9bbd43a641c7303ef",
+                keyValue: "07c7f996b1734ea288641a68e1cfdc4d",
+            },
+            {
+                name: "gma 2", 
+                url: "https://cdn-uw2-prod.tsv2.amagi.tv/linear/amg01006-abs-cbn-abscbn-gma-x7-dash-abscbnono/7c693236-e0c1-40a3-8bd0-bb25e43f5bfc/index",
+                key: "47635b8e885e19f2ccbdff078c207058",
+                keyValue: "c95ed4c44b0b4f7fa1c6ebbbbaab21a1",
+            }
+        ];
+
+        let currentChannel = null;
+        let player = null;
+        const video = document.getElementById('video');
+        
+        async function initPlayer() {
+            const shaka = window.shaka;
+            shaka.polyfill.installAll();
+
+            if (!shaka.Player.isBrowserSupported()) {
+                console.error('Browser not supported!');
+                return;
+            }
+
+            player = new shaka.Player(video);
+            
+            player.addEventListener('error', (event) => {
+                console.error('Error code', event.detail.code, 'object', event.detail);
+            });
+
+            renderChannelList();
+        }
+
+        async function loadChannel(channel) {
+            if (!player) return;
+
+            try {
+                await player.configure({
+                    drm: {
+                        clearKeys: {
+                            [channel.key]: channel.keyValue
+                        }
+                    }
+                });
+
+                await player.load(channel.url);
+                currentChannel = channel;
+                document.getElementById('channelTitle').textContent = channel.name;
+                video.play();
+            } catch (error) {
+                console.error('Error loading channel:', error);
+            }
+        }
+
+        function renderChannelList() {
+            const channelList = document.getElementById('channelList');
+            channelList.innerHTML = channels.map((channel, index) => `
+                <button onclick="loadChannel(channels[${index}])" 
+                    class="w-full p-4 rounded-lg flex items-center gap-3 transition-all ${
+                        currentChannel?.name === channel.name 
+                            ? 'bg-[#00ff9d] text-black'
+                            : 'bg-[#1a1a1a] text-gray-300 hover:bg-[#222] hover:text-white'
+                    }">
+                    <i class="fas fa-tv"></i>
+                    <span class="font-medium">${channel.name}</span>
+                </button>
+            `).join('');
+        }
+
+        function handleVolumeChange(value) {
+            const newVolume = parseFloat(value);
+            video.volume = newVolume;
+            document.getElementById('volumeIcon').className = 
+                newVolume === 0 ? 'fas fa-volume-xmark text-xl' : 'fas fa-volume-high text-xl';
+        }
+
+        function toggleMute() {
+            video.muted = !video.muted;
+            document.getElementById('volumeIcon').className = 
+                video.muted ? 'fas fa-volume-xmark text-xl' : 'fas fa-volume-high text-xl';
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                video.requestFullscreen();
+                document.getElementById('fullscreenIcon').className = 'fas fa-compress text-xl';
+            } else {
+                document.exitFullscreen();
+                document.getElementById('fullscreenIcon').className = 'fas fa-expand text-xl';
+            }
+        }
+
+        function togglePlayPause() {
+            if (video.paused) {
+                video.play();
+                document.getElementById('playPauseIcon').className = 'fas fa-pause text-black text-lg';
+            } else {
+                video.pause();
+                document.getElementById('playPauseIcon').className = 'fas fa-play text-black text-lg';
+            }
+        }
+
+        function nextChannel() {
+            const currentIndex = channels.findIndex(ch => ch.name === currentChannel?.name);
+            const nextIndex = (currentIndex + 1) % channels.length;
+            loadChannel(channels[nextIndex]);
+        }
+
+        function previousChannel() {
+            const currentIndex = channels.findIndex(ch => ch.name === currentChannel?.name);
+            const prevIndex = currentIndex <= 0 ? channels.length - 1 : currentIndex - 1;
+            loadChannel(channels[prevIndex]);
+        }
+
+        document.addEventListener('DOMContentLoaded', initPlayer);
+    </script>
+</body>
+</html></> /></body></script></body></html></></>
+
+
